@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seahawks Playoff Impact Dashboard</title>
+    <style>
+        :root {
+            --seahawks-blue: #002244;
+            --seahawks-green: #69BE28;
+            --seahawks-gray: #A5ACAF;
+            --bg-dark: #121212;
+            --card-bg: #1e1e1e;
+            --text-main: #ffffff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            background-color: var(--seahawks-blue);
+            padding: 20px;
+            border-bottom: 4px solid var(--seahawks-green);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        h1 { margin: 0; font-size: 24px; color: #fff; }
+        .timestamp { font-size: 14px; color: var(--seahawks-gray); margin-top: 5px; }
+        
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .nav-btn, .refresh-btn {
+            border: none;
+            padding: 9px 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s, background-color 0.2s;
+            font-size: 14px;
+        }
+        .nav-btn {
+            background-color: #2c3e50;
+            color: #fff;
+            border: 1px solid #455a64;
+        }
+        .nav-btn:hover:not(:disabled) {
+            background-color: #3b5268;
+        }
+        .nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .week-label {
+            font-weight: bold;
+            font-size: 15px;
+            padding: 0 8px;
+            color: var(--seahawks-green);
+        }
+        .refresh-btn {
+            background-color: var(--seahawks-green);
+            color: var(--seahawks-blue);
+        }
+        .refresh-btn:hover { opacity: 0.9; }
+        
+        .summary-banner {
+            background-color: #1a2536;
+            border: 1px solid #2d3d52;
+            border-radius: 6px;
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 15px;
+        }
+        .summary-title {
+            font-weight: bold;
+            color: var(--seahawks-green);
+            text-transform: uppercase;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+        .summary-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0,0,0,0.25);
+            padding: 5px 12px;
+            border-radius: 4px;
+        }
+
+        .standings-panel {
+            background-color: var(--card-bg);
+            border: 1px solid #2d3d52;
+            border-radius: 6px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        .standings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .standings-header h2 {
+            margin: 0;
+            font-size: 16px;
+            color: var(--seahawks-green);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .toggle-hint {
+            font-size: 13px;
+            color: var(--seahawks-gray);
+        }
+        .standings-table-wrap {
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+        table.standings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            text-align: left;
+        }
+        .standings-table th {
+            color: var(--seahawks-gray);
+            font-weight: 600;
+            padding: 8px 10px;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .standings-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .standings-table tr.seahawks-row {
+            background-color: rgba(105, 190, 40, 0.18);
+            font-weight: bold;
+            color: #fff;
+        }
+        .standings-table tr.cutoff-row td {
+            border-bottom: 2px dashed #e74c3c;
+        }
+        .seed-pill {
+            display: inline-block;
+            width: 22px;
+            text-align: center;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 2px 0;
+            background: #2c3e50;
+        }
+        .seed-pill.in-playoffs {
+            background: var(--seahawks-green);
+            color: var(--seahawks-blue);
+        }
+        .seed-pill.bubble {
+            background: #e67e22;
+            color: #fff;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 15px;
+        }
+        .game-card {
+            background-color: var(--card-bg);
+            border-left: 5px solid var(--seahawks-gray);
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .game-card.consequential {
+            border-left-color: var(--seahawks-green);
+        }
+        .game-status {
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            color: var(--seahawks-green);
+        }
+        .team-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 18px;
+        }
+        .team-name { font-weight: 500; }
+        .team-record { font-size: 13px; color: var(--seahawks-gray); margin-left: 6px; }
+        .team-score { font-weight: bold; font-family: monospace; font-size: 20px; }
+        .team-row.winner { color: var(--seahawks-green); }
+        
+        .rooting-guide {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+            font-size: 14px;
+        }
+        .indicator {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            line-height: 1.4;
+        }
+        .indicator.good {
+            background-color: rgba(105, 190, 40, 0.15);
+            border-left: 3px solid #69BE28;
+            color: #fff;
+        }
+        .indicator.bad {
+            background-color: rgba(231, 76, 60, 0.15);
+            border-left: 3px solid #e74c3c;
+            color: #fff;
+        }
+        .indicator.neutral {
+            background-color: rgba(241, 196, 15, 0.15);
+            border-left: 3px solid #f1c40f;
+            color: #fff;
+        }
+        .indicator span {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .loading { font-size: 18px; text-align: center; margin: 20px 0; color: var(--seahawks-gray); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>Seahawks Playoff Impact Dashboard</h1>
+            <div class="timestamp" id="timestamp">Loading schedule...</div>
+        </div>
+        <div class="controls">
+            <button class="nav-btn" id="btn-prev-week" onclick="changeWeek(-1)" disabled>◀ Prev Week</button>
+            <span class="week-label" id="week-display">Week --</span>
+            <button class="nav-btn" id="btn-next-week" onclick="changeWeek(1)" disabled>Next Week ▶</button>
+            <button class="nav-btn" id="btn-curr-week" onclick="resetToCurrentWeek()" style="display:none;">Current Week</button>
+            <button class="refresh-btn" onclick="fetchNFLGames(selectedWeek)">Refresh</button>
+        </div>
+    </header>
+
+    <div class="summary-banner" id="summary-banner" style="display: none;">
+        <span class="summary-title">Playoff Tracking Summary:</span>
+        <div class="summary-badge" id="badge-seahawks">🟢 Seahawks: --</div>
+        <div class="summary-badge" id="badge-seed">📊 NFC Seed: --</div>
+        <div class="summary-badge" id="badge-rivals-fell">🔥 Rivals Knocked Down: 0</div>
+        <div class="summary-badge" id="badge-rivals-survived">⚠️ Rivals Holding Ground: 0</div>
+    </div>
+
+    <div class="standings-panel" id="standings-panel" style="display: none;">
+        <div class="standings-header" onclick="toggleStandings()">
+            <h2>NFC Playoff Picture & Wild Card Hunt (Top 7 Advance)</h2>
+            <span class="toggle-hint" id="standings-toggle-text">▲ Hide Table</span>
+        </div>
+        <div class="standings-table-wrap" id="standings-table-wrap">
+            <table class="standings-table">
+                <thead>
+                    <tr>
+                        <th>Seed</th>
+                        <th>Team</th>
+                        <th>Division</th>
+                        <th>Record</th>
+                        <th>Win %</th>
+                        <th>Conf</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="standings-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="loading" class="loading">Fetching current live games from ESPN...</div>
+    <div class="container" id="dashboard-container"></div>
+
+    <script>
+        const NFC_TEAMS = new Set([
+            "SEA", "SF", "ARI", "LAR", "LA",
+            "GB", "MIN", "DET", "CHI",
+            "PHI", "WSH", "DAL", "NYG",
+            "ATL", "TB", "CAR", "NO"
+        ]);
+        const NFC_WEST = new Set(["SF", "ARI", "LAR", "LA"]);
+
+        let currentSeasonWeek = null;
+        let selectedWeek = null;
+        let standingsVisible = true;
+
+        function normalizeAbbrev(abbr) {
+            return abbr === "LA" ? "LAR" : abbr;
+        }
+
+        function toggleStandings() {
+            standingsVisible = !standingsVisible;
+            document.getElementById('standings-table-wrap').style.display = standingsVisible ? 'block' : 'none';
+            document.getElementById('standings-toggle-text').innerText = standingsVisible ? '▲ Hide Table' : '▼ Show Table';
+        }
+
+        function changeWeek(delta) {
+            if (selectedWeek === null) return;
+            const next = selectedWeek + delta;
+            if (next >= 1 && next <= 18) {
+                selectedWeek = next;
+                fetchNFLGames(selectedWeek);
+            }
+        }
+
+        function resetToCurrentWeek() {
+            selectedWeek = currentSeasonWeek;
+            fetchNFLGames(selectedWeek);
+        }
+
+        function updateWeekControls(activeWeek) {
+            document.getElementById('week-display').innerText = `Week ${activeWeek}`;
+            document.getElementById('btn-prev-week').disabled = (activeWeek <= 1);
+            document.getElementById('btn-next-week').disabled = (activeWeek >= 18);
+            const currBtn = document.getElementById('btn-curr-week');
+            if (currentSeasonWeek && activeWeek !== currentSeasonWeek) {
+                currBtn.style.display = 'inline-block';
+            } else {
+                currBtn.style.display = 'none';
+            }
+        }
+
+        async function fetchNFLGames(weekOverride = null) {
+            const container = document.getElementById('dashboard-container');
+            const loadingEl = document.getElementById('loading');
+            const timestampEl = document.getElementById('timestamp');
+            const bannerEl = document.getElementById('summary-banner');
+            
+            loadingEl.style.display = 'block';
+            
+            try {
+                const scoreboardUrl = weekOverride
+                    ? `https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${weekOverride}`
+                    : `https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard`;
+
+                const [scoreRes, standRes] = await Promise.all([
+                    fetch(scoreboardUrl),
+                    fetch('https://site.web.api.espn.com/apis/v2/sports/football/nfl/standings')
+                ]);
+
+                const data = await scoreRes.json();
+                const standData = await standRes.json();
+
+                const detectedWeek = data.week ? data.week.number : 1;
+                if (currentSeasonWeek === null && !weekOverride) {
+                    currentSeasonWeek = detectedWeek;
+                }
+                if (selectedWeek === null) {
+                    selectedWeek = detectedWeek;
+                }
+                updateWeekControls(detectedWeek);
+
+                // Parse standings and NFC playoff seeding
+                const standingsMap = {};
+                const nfcTeamsList = [];
+
+                if (standData && standData.children) {
+                    standData.children.forEach(conf => {
+                        const isNFCConf = conf.abbreviation === "NFC" || (conf.name && conf.name.includes("National"));
+                        if (conf.standings && conf.standings.entries) {
+                            conf.standings.entries.forEach(entry => {
+                                const abbr = normalizeAbbrev(entry.team.abbreviation);
+                                const stats = {};
+                                entry.stats.forEach(s => {
+                                    stats[s.name] = s.value;
+                                    if (s.displayValue) stats[s.name + '_disp'] = s.displayValue;
+                                });
+                                const wins = stats.wins || 0;
+                                const losses = stats.losses || 0;
+                                const ties = stats.ties || 0;
+                                const games = wins + losses + ties;
+                                const winPct = games > 0 ? (wins + 0.5 * ties) / games : 0.5;
+                                const seed = stats.playoffSeed || 99;
+                                const confRec = stats.vsConf_disp || `${stats.conferenceWins || 0}-${stats.conferenceLosses || 0}`;
+                                const divName = entry.team.groups && entry.team.groups.parent ? "" : (stats.division || "");
+
+                                const teamObj = {
+                                    abbr,
+                                    name: entry.team.displayName,
+                                    shortName: entry.team.shortDisplayName || entry.team.displayName,
+                                    wins,
+                                    losses,
+                                    ties,
+                                    winPct,
+                                    seed,
+                                    confRec,
+                                    record: `${wins}-${losses}${ties > 0 ? '-' + ties : ''}`
+                                };
+                                standingsMap[abbr] = teamObj;
+                                if (isNFCConf || NFC_TEAMS.has(abbr)) {
+                                    nfcTeamsList.push(teamObj);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                // Sort NFC teams by playoff seed (or winPct fallback)
+                nfcTeamsList.sort((a, b) => {
+                    if (a.seed !== b.seed) return a.seed - b.seed;
+                    return b.winPct - a.winPct;
+                });
+
+                // Render NFC Standings Table (Top 12 contenders)
+                const standingsPanel = document.getElementById('standings-panel');
+                const tbody = document.getElementById('standings-tbody');
+                if (nfcTeamsList.length > 0) {
+                    tbody.innerHTML = '';
+                    nfcTeamsList.slice(0, 12).forEach((t, idx) => {
+                        const seedNum = t.seed !== 99 ? t.seed : (idx + 1);
+                        const isSea = t.abbr === "SEA";
+                        const isCutoff = seedNum === 7;
+                        let pillClass = "";
+                        let statusBadge = "In the Hunt";
+                        if (seedNum <= 4) {
+                            pillClass = "in-playoffs";
+                            statusBadge = "Division Leader";
+                        } else if (seedNum <= 7) {
+                            pillClass = "in-playoffs";
+                            statusBadge = "Wild Card Spot";
+                        } else if (seedNum <= 10) {
+                            pillClass = "bubble";
+                            statusBadge = "On the Bubble";
+                        }
+
+                        const divLabel = NFC_WEST.has(t.abbr) ? "NFC West" :
+                                         (["GB","MIN","DET","CHI"].includes(t.abbr) ? "NFC North" :
+                                         (["PHI","WSH","DAL","NYG"].includes(t.abbr) ? "NFC East" : "NFC South"));
+
+                        const tr = document.createElement('tr');
+                        if (isSea) tr.classList.add('seahawks-row');
+                        if (isCutoff) tr.classList.add('cutoff-row');
+
+                        tr.innerHTML = `
+                            <td><span class="seed-pill ${pillClass}">${seedNum}</span></td>
+                            <td>${t.name} (${t.abbr}) ${isSea ? '🟢' : ''}</td>
+                            <td>${divLabel}</td>
+                            <td>${t.record}</td>
+                            <td>${t.winPct.toFixed(3)}</td>
+                            <td>${t.confRec}</td>
+                            <td>${statusBadge}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                    standingsPanel.style.display = 'block';
+                }
+
+                container.innerHTML = '';
+                loadingEl.style.display = 'none';
+                
+                const isViewingCurrent = !currentSeasonWeek || detectedWeek === currentSeasonWeek;
+                timestampEl.innerText = `NFL Week ${detectedWeek} ${isViewingCurrent ? '(Current)' : '(Schedule View)'} | Last Checked: ${new Date().toLocaleTimeString()}`;
+
+                const events = data.events || [];
+                
+                if (events.length === 0) {
+                    container.innerHTML = '<div class="loading">No games found for this week.</div>';
+                    bannerEl.style.display = 'none';
+                    return;
+                }
+
+                const seaData = standingsMap["SEA"];
+                const seaRecord = seaData ? ` (${seaData.record})` : "";
+                const seaSeedText = (seaData && seaData.seed !== 99) ? `#${seaData.seed} in NFC` : "--";
+                let seahawksStatus = `Bye / No Game${seaRecord}`;
+                let targetsExtinguished = 0;
+                let targetsSurvived = 0;
+
+                events.forEach(event => {
+                    const competition = event.competitions[0];
+                    const competitors = competition.competitors;
+                    
+                    const homeTeam = competitors.find(c => c.homeAway === 'home');
+                    const awayTeam = competitors.find(c => c.homeAway === 'away');
+                    
+                    const homeAbbrev = normalizeAbbrev(homeTeam.team.abbreviation);
+                    const awayAbbrev = normalizeAbbrev(awayTeam.team.abbreviation);
+                    const homeName = homeTeam.team.shortDisplayName || homeTeam.team.displayName;
+                    const awayName = awayTeam.team.shortDisplayName || awayTeam.team.displayName;
+                    
+                    const isHomeNFC = NFC_TEAMS.has(homeAbbrev);
+                    const isAwayNFC = NFC_TEAMS.has(awayAbbrev);
+                    const isSeahawks = homeAbbrev === "SEA" || awayAbbrev === "SEA";
+                    const isConsequential = isHomeNFC || isAwayNFC || isSeahawks;
+
+                    if (!isConsequential) return;
+
+                    const homeInfo = standingsMap[homeAbbrev] || { winPct: 0.5, record: "" };
+                    const awayInfo = standingsMap[awayAbbrev] || { winPct: 0.5, record: "" };
+
+                    const statusType = event.status.type.state; 
+                    const statusDetail = event.status.type.detail;
+
+                    let preferredWinnerAbbrev = null;
+                    let preferredWinnerName = "";
+                    let threatTeamName = "";
+                    let threatTeamRecord = "";
+                    let matchupReason = "";
+
+                    if (!isSeahawks) {
+                        if (isHomeNFC && !isAwayNFC) {
+                            preferredWinnerAbbrev = awayAbbrev;
+                            preferredWinnerName = awayName;
+                            threatTeamName = homeName;
+                            threatTeamRecord = homeInfo.record;
+                            matchupReason = `Root for AFC's ${awayName} to hand NFC contender ${homeName} (${homeInfo.record}) a conference loss.`;
+                        } else if (isAwayNFC && !isHomeNFC) {
+                            preferredWinnerAbbrev = homeAbbrev;
+                            preferredWinnerName = homeName;
+                            threatTeamName = awayName;
+                            threatTeamRecord = awayInfo.record;
+                            matchupReason = `Root for AFC's ${homeName} to hand NFC contender ${awayName} (${awayInfo.record}) a conference loss.`;
+                        } else if (isHomeNFC && isAwayNFC) {
+                            const homeThreat = homeInfo.winPct + (NFC_WEST.has(homeAbbrev) ? 0.30 : 0);
+                            const awayThreat = awayInfo.winPct + (NFC_WEST.has(awayAbbrev) ? 0.30 : 0);
+
+                            if (homeThreat >= awayThreat) {
+                                preferredWinnerAbbrev = awayAbbrev;
+                                preferredWinnerName = awayName;
+                                threatTeamName = homeName;
+                                threatTeamRecord = homeInfo.record;
+                                matchupReason = NFC_WEST.has(homeAbbrev)
+                                    ? `NFC West Threat: Root for ${awayName} (${awayInfo.record}) to knock down divisional rival ${homeName} (${homeInfo.record}).`
+                                    : `Standings Threat: Root for ${awayName} (${awayInfo.record}) to pull down higher-seeded ${homeName} (${homeInfo.record}).`;
+                            } else {
+                                preferredWinnerAbbrev = homeAbbrev;
+                                preferredWinnerName = homeName;
+                                threatTeamName = awayName;
+                                threatTeamRecord = awayInfo.record;
+                                matchupReason = NFC_WEST.has(awayAbbrev)
+                                    ? `NFC West Threat: Root for ${homeName} (${homeInfo.record}) to knock down divisional rival ${awayName} (${awayInfo.record}).`
+                                    : `Standings Threat: Root for ${homeName} (${homeInfo.record}) to pull down higher-seeded ${awayName} (${awayInfo.record}).`;
+                            }
+                        }
+                    }
+
+                    let guideClass = "neutral";
+                    let guideIcon = "🟡";
+                    let guideText = "";
+
+                    if (isSeahawks) {
+                        const oppName = homeAbbrev === "SEA" ? awayName : homeName;
+                        if (statusType === 'pre') seahawksStatus = `vs ${oppName}${seaRecord}`;
+                        else if (statusType === 'in') seahawksStatus = `Live (${statusDetail})`;
+                        else if (statusType === 'post') {
+                            const seaWon = (homeTeam.winner && homeAbbrev === "SEA") || (awayTeam.winner && awayAbbrev === "SEA");
+                            seahawksStatus = seaWon ? `🎉 WON${seaRecord}` : `❌ LOST${seaRecord}`;
+                        }
+                        
+                        guideClass = "good";
+                        guideIcon = "🟢";
+                        guideText = "<strong>CRITICAL GAME: Root for the Seahawks! Winning secures our direct line to the postseason.</strong>";
+                    } else {
+                        const homeScore = parseInt(homeTeam.score || "0", 10);
+                        const awayScore = parseInt(awayTeam.score || "0", 10);
+                        const prefIsHome = homeAbbrev === preferredWinnerAbbrev;
+                        const prefScore = prefIsHome ? homeScore : awayScore;
+                        const threatScore = prefIsHome ? awayScore : homeScore;
+
+                        if (statusType === 'post') {
+                            const preferredWon = (homeTeam.winner && homeAbbrev === preferredWinnerAbbrev) || (awayTeam.winner && awayAbbrev === preferredWinnerAbbrev);
+                            
+                            if (preferredWon) {
+                                targetsExtinguished++;
+                                guideClass = "good";
+                                guideIcon = "🔥";
+                                guideText = `<strong>GREAT OUTCOME: ${preferredWinnerName} defeated ${threatTeamName} (${threatTeamRecord})!</strong> This loss slides Seattle up in the playoff hierarchy.`;
+                            } else {
+                                targetsSurvived++;
+                                guideClass = "bad";
+                                guideIcon = "⚠️";
+                                guideText = `<strong>${threatTeamName} (${threatTeamRecord}) held ground and won.</strong> Their added win tightens Seattle's Wild Card margin.`;
+                            }
+                        } else if (statusType === 'in') {
+                            if (prefScore > threatScore) {
+                                targetsExtinguished++;
+                                guideClass = "good";
+                                guideIcon = "🔥";
+                                guideText = `<strong>LOOKING GOOD (${preferredWinnerName} leading):</strong> ${matchupReason}`;
+                            } else if (threatScore > prefScore) {
+                                targetsSurvived++;
+                                guideClass = "bad";
+                                guideIcon = "⚠️";
+                                guideText = `<strong>DANGER (${threatTeamName} leading):</strong> ${matchupReason}`;
+                            } else {
+                                guideClass = "neutral";
+                                guideIcon = "🟡";
+                                guideText = `<strong>TIED GAME:</strong> ${matchupReason}`;
+                            }
+                        } else {
+                            guideClass = (isHomeNFC && isAwayNFC) ? "neutral" : "bad";
+                            guideIcon = "🎯";
+                            guideText = matchupReason;
+                        }
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = `game-card ${isConsequential ? 'consequential' : ''}`;
+
+                    const isHomeWinner = statusType === 'post' && homeTeam.winner;
+                    const isAwayWinner = statusType === 'post' && awayTeam.winner;
+
+                    card.innerHTML = `
+                        <div class="game-status">${statusDetail}</div>
+                        <div class="team-row ${isAwayWinner ? 'winner' : ''}">
+                            <span class="team-name">${awayTeam.team.displayName} (${awayAbbrev})<span class="team-record">${awayInfo.record}</span></span>
+                            <span class="team-score">${statusType !== 'pre' ? awayTeam.score : ''}</span>
+                        </div>
+                        <div class="team-row ${isHomeWinner ? 'winner' : ''}">
+                            <span class="team-name">${homeTeam.team.displayName} (${homeAbbrev})<span class="team-record">${homeInfo.record}</span></span>
+                            <span class="team-score">${statusType !== 'pre' ? homeTeam.score : ''}</span>
+                        </div>
+                        <div class="rooting-guide">
+                            <div class="indicator ${guideClass}">
+                                <span>${guideIcon}</span>
+                                <div>${guideText}</div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+
+                document.getElementById('badge-seahawks').innerText = `🟢 Seahawks: ${seahawksStatus}`;
+                document.getElementById('badge-seed').innerText = `📊 NFC Seed: ${seaSeedText}`;
+                document.getElementById('badge-rivals-fell').innerText = `🔥 Rivals Knocked Down: ${targetsExtinguished}`;
+                document.getElementById('badge-rivals-survived').innerText = `⚠️ Rivals Holding Ground: ${targetsSurvived}`;
+                bannerEl.style.display = 'flex';
+
+            } catch (error) {
+                console.error("Failed to parse data payload:", error);
+                loadingEl.innerText = "Error loading current live data. Please try again shortly.";
+                bannerEl.style.display = 'none';
+            }
+        }
+
+        fetchNFLGames();
+        setInterval(() => {
+            if (!currentSeasonWeek || selectedWeek === currentSeasonWeek) {
+                fetchNFLGames(selectedWeek);
+            }
+        }, 60000);
+    </script>
+</body>
+</html>
